@@ -1,25 +1,30 @@
 /*
- * Descrição: Este programa simula a fila de "próximas peças"
- * de um jogo estilo Tetris, usando uma Fila Circular.
+ * DESAFIO: Fila de Peças Futuras + Pilha de Reserva
  *
- * Conceitos Trabalhados:
- * - Fila Circular (FIFO - First-In, First-Out)
- * - Structs e Arrays
- * - Modularização (Funções)
+ * Descrição: Este programa simula o gerenciamento de peças
+ * de um jogo estilo Tetris, usando uma Fila Circular (FIFO)
+ * para peças futuras e uma Pilha (LIFO) para peças reservadas.
+ *
+ * Requisitos:
+ * - Fila Circular (Tamanho 5)
+ * - Pilha Linear (Tamanho 3)
+ * - Ações: Jogar (Dequeue), Reservar (Dequeue -> Push), Usar (Pop)
+ * - Fila deve ser mantida sempre cheia.
  */
 
-// --- Bibliotecas Necessárias ---
+// --- 1. Bibliotecas Necessárias ---
 #include <stdio.h>    // Para entrada e saída (printf, scanf)
 #include <stdlib.h>   // Para rand(), srand() e system()
 #include <time.h>     // Para time() (semente do rand)
 
-// --- Definições Globais e Structs ---
+// --- 2. Definições Globais e Structs ---
 
-// Define o tamanho máximo da nossa fila de peças
+// (RF) Capacidades das estruturas
 #define TAM_FILA 5
+#define TAM_PILHA 3
 
 /**
- * @brief (FR Atributos)
+ * @brief (RF Atributos)
  * Define a estrutura de uma peça do jogo.
  */
 struct Peca {
@@ -27,88 +32,121 @@ struct Peca {
     int id;    // Identificador único
 };
 
-// --- Variáveis Globais da Fila Circular ---
+// --- 3. Variáveis Globais (Estado do Jogo) ---
 
-// O array (vetor) que armazena as peças
+// Fila Circular de Peças Futuras
 struct Peca filaDePecas[TAM_FILA];
+int fila_inicio = 0;    // Índice de onde a peça SAIRÁ (dequeue)
+int fila_fim = 0;       // Índice de onde a peça ENTRARÁ (enqueue)
+int fila_total = 0;     // Contador de itens na fila
 
-// Índices que controlam a fila circular
-int inicio = 0; // Aponta para o PRIMEIRO item da fila (onde sai)
-int fim = 0;    // Aponta para a PRÓXIMA POSIÇÃO LIVRE (onde entra)
-int totalItens = 0; // Contador para verificar se está cheia ou vazia
+// Pilha de Peças Reservadas
+struct Peca pilhaDeReserva[TAM_PILHA];
+int pilha_topo = -1;    // Índice do topo da pilha (-1 = vazia)
 
-// --- Protótipos das Funções (Modularização) ---
+// --- 4. Protótipos das Funções (Modularização) ---
 
-// Funções de Geração de Peças
+// Geração de Peças
 struct Peca gerarPeca();
 
-// Funções da Fila (Conceitos)
-void enqueue(struct Peca novaPeca); // Inserir nova peça (FR)
-struct Peca dequeue();             // Jogar peça (FR)
-void exibirFila();                 // (FR)
+// Funções da Fila Circular
+void enqueue(struct Peca novaPeca);
+struct Peca dequeue();
+int filaEstaCheia();
+int filaEstaVazia();
 
-// Funções de Verificação (Controle)
-int estaVazia();
-int estaCheia();
+// Funções da Pilha Linear
+void push(struct Peca pecaReservada);
+struct Peca pop();
+int pilhaEstaCheia();
+int pilhaEstaVazia();
+
+// Funções do Jogo e Interface
+void inicializarSistema(); // (RF)
+void exibirEstado();       // (RF)
 
 // Funções Auxiliares (NFR Usabilidade)
 void limparTela();
 void pausarSistema();
 void limparBuffer();
-void inicializarFila(); // (FR Inicializar)
 
-// --- Função Principal (Fluxo do Jogo) ---
+// --- 5. Função Principal (Fluxo do Jogo) ---
 
 int main() {
     int opcao;
-
     // Inicializa o gerador de números aleatórios UMA VEZ
     srand(time(NULL));
 
-    // (FR) Inicializa a fila com o número fixo de elementos
-    inicializarFila();
+    // (RF) Inicializa a fila com 5 peças
+    inicializarSistema();
 
     // Loop principal do menu
     do {
         limparTela();
         
-        // (FR) Exibe o estado atual após cada ação
-        exibirFila();
+        // (RF) Exibe o estado atual ANTES de cada ação
+        exibirEstado();
 
-        // (FR) Exemplo de menu e comandos
-        printf("\nOpcoes de acao:\n");
-        printf("1. Jogar peca (dequeue)\n");
-        printf("2. Inserir nova peca (enqueue)\n");
+        // (RF) Exibe o menu de opções
+        printf("Opcoes de Acao:\n");
+        printf("1. Jogar peca\n");
+        printf("2. Reservar peca\n");
+        printf("3. Usar peca reservada\n");
         printf("0. Sair\n");
         printf("----------------------------------\n");
-        printf("Escolha uma acao: ");
+        printf("Opcao: ");
         
         scanf("%d", &opcao);
         limparBuffer(); // Limpa o '\n' do buffer
 
         switch (opcao) {
-            case 1: // Jogar peça (dequeue)
-                if (!estaVazia()) {
-                    struct Peca pecaJogada = dequeue();
-                    printf("\n[ACAO] Peca jogada: [%c %d]\n", 
-                           pecaJogada.nome, pecaJogada.id);
-                } else {
-                    printf("\n[AVISO] A fila esta vazia. Nenhuma peca para jogar.\n");
-                }
+            case 1: { // Jogar peça (RF)
+                // 1. Remove da fila
+                struct Peca pecaJogada = dequeue();
+                printf("\n[ACAO] Peca jogada: [%c %d]\n", 
+                       pecaJogada.nome, pecaJogada.id);
+                
+                // 2. Adiciona nova peça (RF: Mantém fila cheia)
+                enqueue(gerarPeca());
                 pausarSistema();
                 break;
+            }
 
-            case 2: // Inserir nova peça (enqueue)
-                if (!estaCheia()) {
-                    struct Peca novaPeca = gerarPeca();
-                    enqueue(novaPeca);
-                    printf("\n[ACAO] Nova peca inserida: [%c %d]\n", 
-                           novaPeca.nome, novaPeca.id);
+            case 2: { // Reservar peça (RF)
+                // 1. Verifica se a pilha tem espaço
+                if (pilhaEstaCheia()) {
+                    printf("\n[AVISO] Pilha de reserva cheia! Nao e possivel reservar.\n");
                 } else {
-                    printf("\n[AVISO] A fila esta cheia. Jogue uma peca primeiro.\n");
+                    // 2. Remove da fila
+                    struct Peca pecaParaReservar = dequeue();
+                    
+                    // 3. Adiciona na pilha
+                    push(pecaParaReservar);
+                    printf("\n[ACAO] Peca reservada: [%c %d]\n", 
+                           pecaParaReservar.nome, pecaParaReservar.id);
+
+                    // 4. Adiciona nova peça na fila (RF: Mantém fila cheia)
+                    enqueue(gerarPeca());
                 }
                 pausarSistema();
                 break;
+            }
+
+            case 3: { // Usar peça reservada (RF)
+                // 1. Verifica se a pilha tem peças
+                if (pilhaEstaVazia()) {
+                    printf("\n[AVISO] Pilha de reserva vazia! Nao ha o que usar.\n");
+                } else {
+                    // 2. Remove da pilha (pop)
+                    struct Peca pecaUsada = pop();
+                    printf("\n[ACAO] Peca da reserva usada: [%c %d]\n", 
+                           pecaUsada.nome, pecaUsada.id);
+                    // (Nota: Esta ação não remove da fila, 
+                    // portanto não adiciona uma nova peça)
+                }
+                pausarSistema();
+                break;
+            }
 
             case 0:
                 printf("\nSaindo do Tetris Stack...\n");
@@ -124,139 +162,145 @@ int main() {
     return 0;
 }
 
-// --- Implementação das Funções ---
+// --- 6. Implementação das Funções do Jogo ---
 
 /**
- * @brief (FR) Gera uma nova peça automaticamente.
- * Usa um ID estático para garantir que seja único.
- * (Simplificação)
+ * @brief (RF) Gera uma nova peça automaticamente.
+ * Usa um ID estático (static) para garantir que seja único
+ * a cada chamada.
  */
 struct Peca gerarPeca() {
-    // 'static' faz com que 'proximoId' mantenha seu valor
-    // entre as chamadas da função.
     static int proximoId = 0; 
-    
     char tiposDePeca[] = {'I', 'O', 'T', 'L', 'S', 'Z', 'J'};
     struct Peca nova;
 
-    // Sorteia um tipo de peça
+    // Sorteia um tipo de peça (0 a 6)
     nova.nome = tiposDePeca[rand() % 7]; 
-    // Atribui o ID único e incrementa o contador
-    nova.id = proximoId;
-    proximoId++;
+    // Atribui o ID único e incrementa o contador para a próxima
+    nova.id = proximoId++;
 
     return nova;
 }
 
 /**
- * @brief (FR Inicializar)
- * Preenche a fila com 5 peças iniciais.
+ * @brief (RF) Inicializa o sistema, enchendo a fila
+ * com o número definido de peças (5).
  */
-void inicializarFila() {
-    printf("Inicializando fila de pecas...\n");
+void inicializarSistema() {
     for (int i = 0; i < TAM_FILA; i++) {
-        struct Peca p = gerarPeca();
-        enqueue(p);
+        enqueue(gerarPeca());
     }
 }
 
 /**
- * @brief (FR) Insere uma peça no FIM da fila (enqueue).
- * Utiliza lógica circular.
+ * @brief (RF) Exibe o estado atual da Fila e da Pilha.
+ * (NFR Usabilidade / Exemplo de Saída)
+ */
+void exibirEstado() {
+    printf("==================================================\n");
+    printf("                  TETRIS STACK                    \n");
+    printf("==================================================\n");
+    printf("Estado atual:\n\n");
+
+    // 1. Exibir Fila Circular
+    printf("Fila de pecas: ");
+    if (filaEstaVazia()) {
+        printf("[VAZIA]");
+    } else {
+        // Itera da posição 'inicio' até dar 'total' de voltas
+        int i = fila_inicio;
+        for (int count = 0; count < fila_total; count++) {
+            printf("[%c %d] ", filaDePecas[i].nome, filaDePecas[i].id);
+            i = (i + 1) % TAM_FILA; // Avança o índice circularmente
+        }
+    }
+
+    // 2. Exibir Pilha
+    printf("\nPilha de reserva (Topo -> Base): ");
+    if (pilhaEstaVazia()) {
+        printf("[VAZIA]");
+    } else {
+        // Itera do topo ('pilha_topo') até a base (0)
+        for (int i = pilha_topo; i >= 0; i--) {
+            printf("[%c %d] ", pilhaDeReserva[i].nome, pilhaDeReserva[i].id);
+        }
+    }
+    printf("\n--------------------------------------------------\n");
+}
+
+
+// --- 7. Funções de Estrutura de Dados (Fila) ---
+
+/**
+ * @brief Adiciona um item ao FIM da fila circular.
  */
 void enqueue(struct Peca novaPeca) {
-    if (estaCheia()) {
-        return; // Segurança, embora o main() já verifique
+    if (filaEstaCheia()) {
+        // Este cenário não deve ocorrer na lógica do jogo
+        // (pois só damos enqueue após um dequeue), 
+        // mas é uma boa prática de defesa.
+        printf("[ERRO_FILA] Fila cheia, impossivel adicionar!\n");
+        return;
     }
-
-    // Adiciona a peça na posição 'fim'
-    filaDePecas[fim] = novaPeca;
-    
-    // A "mágica" da fila circular:
-    // Move o 'fim' para a próxima posição,
-    // voltando a 0 se chegar ao final do vetor.
-    fim = (fim + 1) % TAM_FILA; 
-    
-    totalItens++; // Incrementa o contador
+    filaDePecas[fila_fim] = novaPeca;
+    fila_fim = (fila_fim + 1) % TAM_FILA; // Avança o fim circularmente
+    fila_total++;
 }
 
 /**
- * @brief (FR) Remove e retorna a peça do INÍCIO da fila (dequeue).
- * Utiliza lógica circular.
+ * @brief Remove e retorna um item do INÍCIO da fila circular.
  */
 struct Peca dequeue() {
-    if (estaVazia()) {
-        // Retorna uma peça "vazia" simbólica em caso de erro
-        // (A lógica principal em main() evita isso)
-        struct Peca vazia = {' ', -1};
-        return vazia; 
+    if (filaEstaVazia()) {
+        // Defesa contra erros
+        struct Peca vazia = {'?', -1};
+        printf("[ERRO_FILA] Fila vazia, impossivel remover!\n");
+        return vazia;
     }
-
-    // Pega a peça da posição 'inicio'
-    struct Peca pecaRemovida = filaDePecas[inicio];
-
-    // A "mágica" da fila circular:
-    // Move o 'inicio' para a próxima posição,
-    // voltando a 0 se chegar ao final do vetor.
-    inicio = (inicio + 1) % TAM_FILA;
-    
-    totalItens--; // Decrementa o contador
-
+    struct Peca pecaRemovida = filaDePecas[fila_inicio];
+    fila_inicio = (fila_inicio + 1) % TAM_FILA; // Avança o início circularmente
+    fila_total--;
     return pecaRemovida;
 }
 
-/**
- * @brief (FR) Exibe o estado atual da fila.
- * (NFR Usabilidade)
- */
-void exibirFila() {
-    printf("==================================\n");
-    printf("      Fila de Pecas (Tetris Stack)  \n");
-    printf("==================================\n");
+int filaEstaCheia() { return (fila_total == TAM_FILA); }
+int filaEstaVazia() { return (fila_total == 0); }
 
-    if (estaVazia()) {
-        printf("Fila de pecas: [VAZIA]\n");
+
+// --- 8. Funções de Estrutura de Dados (Pilha) ---
+
+/**
+ * @brief Adiciona um item ao TOPO da pilha.
+ */
+void push(struct Peca pecaReservada) {
+    if (pilhaEstaCheia()) {
+        printf("[ERRO_PILHA] Pilha cheia, impossivel adicionar!\n");
         return;
     }
+    pilha_topo++; // Move o topo para cima
+    pilhaDeReserva[pilha_topo] = pecaReservada;
+}
 
-    // (Exemplo de Saída)
-    printf("Fila de pecas: ");
-    
-    // Para exibir uma fila circular, não podemos
-    // simplesmente iterar de 0 a totalItens.
-    // Devemos começar em 'inicio' e dar 'totalItens' voltas.
-    int i = inicio;
-    for (int count = 0; count < totalItens; count++) {
-        printf("[%c %d] ", filaDePecas[i].nome, filaDePecas[i].id);
-        
-        // Avança o índice 'i' de forma circular
-        i = (i + 1) % TAM_FILA;
+/**
+ * @brief Remove e retorna um item do TOPO da pilha.
+ */
+struct Peca pop() {
+    if (pilhaEstaVazia()) {
+        struct Peca vazia = {'?', -1};
+        printf("[ERRO_PILHA] Pilha vazia, impossivel remover!\n");
+        return vazia;
     }
-    printf("\n");
+    struct Peca pecaRemovida = pilhaDeReserva[pilha_topo];
+    pilha_topo--; // Move o topo para baixo
+    return pecaRemovida;
 }
 
-// --- Funções de Verificação (Controle) ---
-
-/**
- * @brief Verifica se a fila está vazia.
- */
-int estaVazia() {
-    return (totalItens == 0);
-}
-
-/**
- * @brief Verifica se a fila está cheia.
- */
-int estaCheia() {
-    return (totalItens == TAM_FILA);
-}
+int pilhaEstaCheia() { return (pilha_topo == TAM_PILHA - 1); }
+int pilhaEstaVazia() { return (pilha_topo == -1); }
 
 
-// --- Funções Auxiliares (NFR Usabilidade) ---
+// --- 9. Funções Auxiliares (NFR) ---
 
-/**
- * @brief Limpa a tela do console (portátil).
- */
 void limparTela() {
     #ifdef _WIN32
         system("cls");
@@ -265,18 +309,11 @@ void limparTela() {
     #endif
 }
 
-/**
- * @brief Pausa a execução até o usuário pressionar Enter.
- */
 void pausarSistema() {
     printf("\nPressione Enter para continuar...");
     limparBuffer();
 }
 
-/**
- * @brief Limpa o buffer de entrada (stdin).
- * Necessário após scanf() para consumir o '\n' (Enter).
- */
 void limparBuffer() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
