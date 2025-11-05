@@ -1,15 +1,15 @@
 /*
- * DESAFIO: Fila de Peças Futuras + Pilha de Reserva
+ * DESAFIO: Fila de Peças Futuras + Pilha de Reserva + Trocas
  *
  * Descrição: Este programa simula o gerenciamento de peças
  * de um jogo estilo Tetris, usando uma Fila Circular (FIFO)
- * para peças futuras e uma Pilha (LIFO) para peças reservadas.
+ * e uma Pilha (LIFO).
  *
  * Requisitos:
  * - Fila Circular (Tamanho 5)
  * - Pilha Linear (Tamanho 3)
- * - Ações: Jogar (Dequeue), Reservar (Dequeue -> Push), Usar (Pop)
- * - Fila deve ser mantida sempre cheia.
+ * - Ações: Jogar, Reservar, Usar, Troca Simples, Troca Múltipla.
+ * - Fila deve ser mantida sempre cheia (quando aplicável).
  */
 
 // --- 1. Bibliotecas Necessárias ---
@@ -65,6 +65,13 @@ int pilhaEstaVazia();
 void inicializarSistema(); // (RF)
 void exibirEstado();       // (RF)
 
+// Funções de Ação Estratégica (RF)
+void jogarPeca();
+void reservarPeca();
+void usarPecaReservada();
+void trocarPecaAtual();  // RF Novo
+void trocaMultipla();    // RF Novo
+
 // Funções Auxiliares (NFR Usabilidade)
 void limparTela();
 void pausarSistema();
@@ -87,75 +94,32 @@ int main() {
         // (RF) Exibe o estado atual ANTES de cada ação
         exibirEstado();
 
-        // (RF) Exibe o menu de opções
-        printf("Opcoes de Acao:\n");
-        printf("1. Jogar peca\n");
-        printf("2. Reservar peca\n");
-        printf("3. Usar peca reservada\n");
+        // (RF) Exibe o menu de opções (Exemplo de Saída)
+        printf("Opcoes disponiveis:\n");
+        printf("1. Jogar peca da frente da fila\n");
+        printf("2. Enviar peca da fila para a pilha de reserva\n");
+        printf("3. Usar peca da pilha de reserva\n");
+        printf("4. Trocar peca da frente da fila com o topo da pilha\n");
+        printf("5. Trocar os 3 primeiros da fila com as 3 pecas da pilha\n");
         printf("0. Sair\n");
-        printf("----------------------------------\n");
-        printf("Opcao: ");
+        printf("--------------------------------------------------\n");
+        printf("Opcao escolhida: ");
         
         scanf("%d", &opcao);
         limparBuffer(); // Limpa o '\n' do buffer
 
         switch (opcao) {
-            case 1: { // Jogar peça (RF)
-                // 1. Remove da fila
-                struct Peca pecaJogada = dequeue();
-                printf("\n[ACAO] Peca jogada: [%c %d]\n", 
-                       pecaJogada.nome, pecaJogada.id);
-                
-                // 2. Adiciona nova peça (RF: Mantém fila cheia)
-                enqueue(gerarPeca());
-                pausarSistema();
-                break;
-            }
-
-            case 2: { // Reservar peça (RF)
-                // 1. Verifica se a pilha tem espaço
-                if (pilhaEstaCheia()) {
-                    printf("\n[AVISO] Pilha de reserva cheia! Nao e possivel reservar.\n");
-                } else {
-                    // 2. Remove da fila
-                    struct Peca pecaParaReservar = dequeue();
-                    
-                    // 3. Adiciona na pilha
-                    push(pecaParaReservar);
-                    printf("\n[ACAO] Peca reservada: [%c %d]\n", 
-                           pecaParaReservar.nome, pecaParaReservar.id);
-
-                    // 4. Adiciona nova peça na fila (RF: Mantém fila cheia)
-                    enqueue(gerarPeca());
-                }
-                pausarSistema();
-                break;
-            }
-
-            case 3: { // Usar peça reservada (RF)
-                // 1. Verifica se a pilha tem peças
-                if (pilhaEstaVazia()) {
-                    printf("\n[AVISO] Pilha de reserva vazia! Nao ha o que usar.\n");
-                } else {
-                    // 2. Remove da pilha (pop)
-                    struct Peca pecaUsada = pop();
-                    printf("\n[ACAO] Peca da reserva usada: [%c %d]\n", 
-                           pecaUsada.nome, pecaUsada.id);
-                    // (Nota: Esta ação não remove da fila, 
-                    // portanto não adiciona uma nova peça)
-                }
-                pausarSistema();
-                break;
-            }
-
-            case 0:
-                printf("\nSaindo do Tetris Stack...\n");
-                break;
-
+            case 1: jogarPeca(); break;
+            case 2: reservarPeca(); break;
+            case 3: usarPecaReservada(); break;
+            case 4: trocarPecaAtual(); break;
+            case 5: trocaMultipla(); break;
+            case 0: printf("\nEncerrando o Tetris Stack...\n"); break;
             default:
                 printf("\n[ERRO] Opcao invalida. Tente novamente.\n");
-                pausarSistema();
         }
+
+        if(opcao != 0) pausarSistema();
 
     } while (opcao != 0);
 
@@ -202,12 +166,12 @@ void exibirEstado() {
     printf("==================================================\n");
     printf("Estado atual:\n\n");
 
-    // 1. Exibir Fila Circular
+    // 1. Exibir Fila Circular (Frente -> Fim)
     printf("Fila de pecas: ");
     if (filaEstaVazia()) {
         printf("[VAZIA]");
     } else {
-        // Itera da posição 'inicio' até dar 'total' de voltas
+        // Itera da posição 'fila_inicio' até dar 'fila_total' voltas
         int i = fila_inicio;
         for (int count = 0; count < fila_total; count++) {
             printf("[%c %d] ", filaDePecas[i].nome, filaDePecas[i].id);
@@ -215,7 +179,7 @@ void exibirEstado() {
         }
     }
 
-    // 2. Exibir Pilha
+    // 2. Exibir Pilha (Topo -> Base)
     printf("\nPilha de reserva (Topo -> Base): ");
     if (pilhaEstaVazia()) {
         printf("[VAZIA]");
@@ -228,20 +192,162 @@ void exibirEstado() {
     printf("\n--------------------------------------------------\n");
 }
 
+// --- 7. Implementação das Ações Estratégicas ---
 
-// --- 7. Funções de Estrutura de Dados (Fila) ---
+/**
+ * @brief (RF) Ação 1: Remove a peça da frente (dequeue)
+ * e reabastece a fila (enqueue).
+ */
+void jogarPeca() {
+    if (filaEstaVazia()) {
+        printf("\n[AVISO] Fila vazia! Nenhuma peca para jogar.\n");
+        return;
+    }
+    
+    // 1. Remove da fila
+    struct Peca pecaJogada = dequeue();
+    printf("\n[ACAO] Peca jogada: [%c %d]\n", 
+           pecaJogada.nome, pecaJogada.id);
+    
+    // 2. Adiciona nova peça (RF: Mantém fila cheia)
+    enqueue(gerarPeca());
+    printf("[SISTEMA] Nova peca [%c %d] entrou na fila.\n", 
+           filaDePecas[(fila_fim - 1 + TAM_FILA) % TAM_FILA].nome,
+           filaDePecas[(fila_fim - 1 + TAM_FILA) % TAM_FILA].id);
+}
+
+/**
+ * @brief (RF) Ação 2: Move a peça da frente da fila
+ * para o topo da pilha (dequeue -> push) e reabastece a fila.
+ */
+void reservarPeca() {
+    if (pilhaEstaCheia()) {
+        printf("\n[AVISO] Pilha de reserva cheia! Nao e possivel reservar.\n");
+        return;
+    }
+    if (filaEstaVazia()) {
+        printf("\n[AVISO] Fila vazia! Nenhuma peca para reservar.\n");
+        return;
+    }
+
+    // 1. Remove da fila
+    struct Peca pecaParaReservar = dequeue();
+    
+    // 2. Adiciona na pilha
+    push(pecaParaReservar);
+    printf("\n[ACAO] Peca reservada: [%c %d]\n", 
+           pecaParaReservar.nome, pecaParaReservar.id);
+
+    // 3. Adiciona nova peça na fila (RF: Mantém fila cheia)
+    enqueue(gerarPeca());
+    printf("[SISTEMA] Nova peca [%c %d] entrou na fila.\n",
+           filaDePecas[(fila_fim - 1 + TAM_FILA) % TAM_FILA].nome,
+           filaDePecas[(fila_fim - 1 + TAM_FILA) % TAM_FILA].id);
+}
+
+/**
+ * @brief (RF) Ação 3: Remove a peça do topo da pilha (pop).
+ * Esta ação NÃO reabastece a fila.
+ */
+void usarPecaReservada() {
+    if (pilhaEstaVazia()) {
+        printf("\n[AVISO] Pilha de reserva vazia! Nao ha o que usar.\n");
+        return;
+    }
+
+    // 1. Remove da pilha (pop)
+    struct Peca pecaUsada = pop();
+    printf("\n[ACAO] Peca da reserva usada: [%c %d]\n", 
+           pecaUsada.nome, pecaUsada.id);
+}
+
+/**
+ * @brief (RF) Ação 4: Troca a peça da frente da fila
+ * com a peça do topo da pilha, sem remover/adicionar.
+ */
+void trocarPecaAtual() {
+    if (filaEstaVazia()) {
+        printf("\n[AVISO] A fila esta vazia. Troca impossivel.\n");
+        return;
+    }
+    if (pilhaEstaVazia()) {
+        printf("\n[AVISO] A pilha esta vazia. Troca impossivel.\n");
+        return;
+    }
+
+    // A troca ocorre diretamente nos arrays, sem usar push/pop/etc.
+    // 'fila_inicio' aponta para a peça da frente da fila.
+    // 'pilha_topo' aponta para a peça do topo da pilha.
+    
+    printf("\n[ACAO] Trocando [%c %d] (Frente Fila) com [%c %d] (Topo Pilha).\n",
+           filaDePecas[fila_inicio].nome, filaDePecas[fila_inicio].id,
+           pilhaDeReserva[pilha_topo].nome, pilhaDeReserva[pilha_topo].id);
+
+    // Variável temporária para a troca (swap)
+    struct Peca temp = filaDePecas[fila_inicio];
+    filaDePecas[fila_inicio] = pilhaDeReserva[pilha_topo];
+    pilhaDeReserva[pilha_topo] = temp;
+}
+
+/**
+ * @brief (RF) Ação 5: Troca as 3 primeiras peças da fila
+ * com as 3 peças do topo da pilha.
+ */
+void trocaMultipla() {
+    // Validação de condição
+    if (fila_total < 3) {
+        printf("\n[AVISO] Troca multipla falhou: Fila precisa de no minimo 3 pecas.\n");
+        return;
+    }
+    // (pilha_topo + 1) é o total de itens na pilha
+    if ((pilha_topo + 1) < 3) {
+        printf("\n[AVISO] Troca multipla falhou: Pilha precisa de no minimo 3 pecas.\n");
+        return;
+    }
+
+    printf("\n[ACAO] Executando troca multipla...\n");
+
+    // Mapeamento dos índices (NFR: Legibilidade)
+    
+    // Índices da Fila (Circular)
+    int q_idx0 = fila_inicio; // 1ª peça (Frente)
+    int q_idx1 = (fila_inicio + 1) % TAM_FILA; // 2ª peça
+    int q_idx2 = (fila_inicio + 2) % TAM_FILA; // 3ª peça
+
+    // Índices da Pilha (Linear)
+    int s_idx0 = pilha_topo;     // 1ª peça (Topo)
+    int s_idx1 = pilha_topo - 1; // 2ª peça
+    int s_idx2 = pilha_topo - 2; // 3ª peça (mais próxima da base)
+
+    // Variável temporária para a troca
+    struct Peca temp;
+
+    // Executa a troca (Swap) 1: (Frente da Fila <-> Topo da Pilha)
+    temp = filaDePecas[q_idx0];
+    filaDePecas[q_idx0] = pilhaDeReserva[s_idx0];
+    pilhaDeReserva[s_idx0] = temp;
+
+    // Executa a troca (Swap) 2: (2ª da Fila <-> 2ª da Pilha)
+    temp = filaDePecas[q_idx1];
+    filaDePecas[q_idx1] = pilhaDeReserva[s_idx1];
+    pilhaDeReserva[s_idx1] = temp;
+
+    // Executa a troca (Swap) 3: (3ª da Fila <-> 3ª da Pilha)
+    temp = filaDePecas[q_idx2];
+    filaDePecas[q_idx2] = pilhaDeReserva[s_idx2];
+    pilhaDeReserva[s_idx2] = temp;
+    
+    printf("A troca foi realizada com sucesso.\n");
+}
+
+
+// --- 8. Funções de Estrutura de Dados (Fila) ---
 
 /**
  * @brief Adiciona um item ao FIM da fila circular.
  */
 void enqueue(struct Peca novaPeca) {
-    if (filaEstaCheia()) {
-        // Este cenário não deve ocorrer na lógica do jogo
-        // (pois só damos enqueue após um dequeue), 
-        // mas é uma boa prática de defesa.
-        printf("[ERRO_FILA] Fila cheia, impossivel adicionar!\n");
-        return;
-    }
+    if (filaEstaCheia()) { return; } // Segurança
     filaDePecas[fila_fim] = novaPeca;
     fila_fim = (fila_fim + 1) % TAM_FILA; // Avança o fim circularmente
     fila_total++;
@@ -251,13 +357,7 @@ void enqueue(struct Peca novaPeca) {
  * @brief Remove e retorna um item do INÍCIO da fila circular.
  */
 struct Peca dequeue() {
-    if (filaEstaVazia()) {
-        // Defesa contra erros
-        struct Peca vazia = {'?', -1};
-        printf("[ERRO_FILA] Fila vazia, impossivel remover!\n");
-        return vazia;
-    }
-    struct Peca pecaRemovida = filaDePecas[fila_inicio];
+    struct Peca pecaRemovida = filaDePecas[fila_inicio]; // Pega a peça
     fila_inicio = (fila_inicio + 1) % TAM_FILA; // Avança o início circularmente
     fila_total--;
     return pecaRemovida;
@@ -267,16 +367,13 @@ int filaEstaCheia() { return (fila_total == TAM_FILA); }
 int filaEstaVazia() { return (fila_total == 0); }
 
 
-// --- 8. Funções de Estrutura de Dados (Pilha) ---
+// --- 9. Funções de Estrutura de Dados (Pilha) ---
 
 /**
  * @brief Adiciona um item ao TOPO da pilha.
  */
 void push(struct Peca pecaReservada) {
-    if (pilhaEstaCheia()) {
-        printf("[ERRO_PILHA] Pilha cheia, impossivel adicionar!\n");
-        return;
-    }
+    if (pilhaEstaCheia()) { return; } // Segurança
     pilha_topo++; // Move o topo para cima
     pilhaDeReserva[pilha_topo] = pecaReservada;
 }
@@ -285,11 +382,6 @@ void push(struct Peca pecaReservada) {
  * @brief Remove e retorna um item do TOPO da pilha.
  */
 struct Peca pop() {
-    if (pilhaEstaVazia()) {
-        struct Peca vazia = {'?', -1};
-        printf("[ERRO_PILHA] Pilha vazia, impossivel remover!\n");
-        return vazia;
-    }
     struct Peca pecaRemovida = pilhaDeReserva[pilha_topo];
     pilha_topo--; // Move o topo para baixo
     return pecaRemovida;
@@ -299,7 +391,7 @@ int pilhaEstaCheia() { return (pilha_topo == TAM_PILHA - 1); }
 int pilhaEstaVazia() { return (pilha_topo == -1); }
 
 
-// --- 9. Funções Auxiliares (NFR) ---
+// --- 10. Funções Auxiliares (NFR) ---
 
 void limparTela() {
     #ifdef _WIN32
